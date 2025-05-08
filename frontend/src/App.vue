@@ -1,21 +1,33 @@
 <template>
-  <div id="app">
-    <!-- 路由占位符 -->
-    <router-view></router-view>
-  </div>
+    <div id="app">
+        <top-nav />
+        <div class="main-content">
+            <router-view></router-view>
+        </div>
+    </div>
 </template>
 
 <script>
-
+import TopNav from './components/TopNav.vue'
 
 export default {
-  name: 'App'
+    name: 'App',
+    components: {
+        TopNav
+    }
 }
 </script>
 
 <style>
 #app {
-  width: 100%;
-  height: 100%;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.main-content {
+    flex: 1;
+    padding: 20px;
+    background-color: #f5f5f5;
 }
 </style>

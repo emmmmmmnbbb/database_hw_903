@@ -126,7 +126,7 @@ export default {
     },
     methods: {
         getStations() {
-            this.$axios.get('/api/stations').then(res => {
+            this.$axios.get('/stations').then(res => {
                 if (res.data.status === 200) {
                     this.stations = res.data.stations;
                 }
@@ -138,7 +138,7 @@ export default {
             this.chargingDialog = true;
         },
         getAvailablePiles(stationId) {
-            this.$axios.get(`/api/stations/${stationId}/piles`).then(res => {
+            this.$axios.get(`/stations/${stationId}/piles`).then(res => {
                 if (res.data.status === 200) {
                     this.availablePiles = res.data.piles;
                 }
@@ -155,7 +155,7 @@ export default {
         startCharging() {
             this.$refs.chargingForm.validate(valid => {
                 if (valid) {
-                    this.$axios.post('/api/charging/start', {
+                    this.$axios.post('/charging/start', {
                         station_id: this.selectedStation.id,
                         pile_id: this.chargingForm.pile_id,
                         amount: this.chargingForm.amount,
