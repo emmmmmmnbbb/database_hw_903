@@ -135,7 +135,7 @@ export default {
         handleLogin() {
             this.$refs.loginForm.validate(valid => {
                 if (valid) {
-                    this.$axios.post('/api/login', this.loginForm).then(res => {
+                    this.$axios.post('/login', this.loginForm).then(res => {
                         if (res.data.status === 200) {
                             localStorage.setItem('token', res.data.token);
                             localStorage.setItem('userType', this.loginForm.type);
@@ -155,7 +155,7 @@ export default {
         handleRegister() {
             this.$refs.registerForm.validate(valid => {
                 if (valid) {
-                    this.$axios.post('/api/register', this.registerForm).then(res => {
+                    this.$axios.post('/register', this.registerForm).then(res => {
                         if (res.data.status === 200) {
                             this.$message.success('注册成功，请登录');
                             this.activeTab = 'login';

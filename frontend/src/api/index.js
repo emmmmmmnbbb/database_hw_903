@@ -1,8 +1,7 @@
 import axios from "axios"
 
 const api = axios.create({
-    // 使用相对路径，让代理配置生效
-    baseURL: "/api",
+    baseURL: "http://127.0.0.1:5000",  
     timeout: 5000
 })
 

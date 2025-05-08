@@ -1,7 +1,7 @@
 /*
  Navicat Premium Dump SQL
 
- Source Server         : mysql
+ Source Server         : charge
  Source Server Type    : MySQL
  Source Server Version : 80042 (8.0.42)
  Source Host           : localhost:3306
@@ -11,7 +11,7 @@
  Target Server Version : 80042 (8.0.42)
  File Encoding         : 65001
 
- Date: 07/05/2025 20:14:15
+ Date: 07/05/2025 23:41:53
 */
 
 SET NAMES utf8mb4;
@@ -28,7 +28,7 @@ CREATE TABLE `admin`  (
   `Password` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '登录密码（加密）',
   PRIMARY KEY (`AdminID`) USING BTREE,
   CONSTRAINT `chk_role` CHECK (`Role` in (0,1))
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '管理员信息表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '管理员信息表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of admin
@@ -48,7 +48,7 @@ CREATE TABLE `charger`  (
   INDEX `fk_charger_manager`(`Manager` ASC) USING BTREE,
   CONSTRAINT `fk_charger_manager` FOREIGN KEY (`Manager`) REFERENCES `admin` (`AdminID`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `chk_status_range` CHECK (`Status` in (0,1,2))
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '充电桩信息表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '充电桩信息表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of charger
@@ -71,7 +71,7 @@ CREATE TABLE `chargingsession`  (
   INDEX `fk_session_charger`(`ChargerID` ASC) USING BTREE,
   CONSTRAINT `fk_session_charger` FOREIGN KEY (`ChargerID`) REFERENCES `charger` (`ChargerID`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_session_user` FOREIGN KEY (`UserID`) REFERENCES `user` (`UserID`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '充电会话记录表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '充电会话记录表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of chargingsession
@@ -91,7 +91,7 @@ CREATE TABLE `electricvehicle`  (
   PRIMARY KEY (`VehicleID`) USING BTREE,
   INDEX `fk_ev_user`(`UserID` ASC) USING BTREE,
   CONSTRAINT `fk_ev_user` FOREIGN KEY (`UserID`) REFERENCES `user` (`UserID`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '电动车信息表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '电动车信息表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of electricvehicle
@@ -107,7 +107,7 @@ CREATE TABLE `income`  (
   `TimePeriod` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '时间区间',
   `Notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '备注',
   PRIMARY KEY (`IncomeID`) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '收入结算记录表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '收入结算记录表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of income
@@ -125,7 +125,7 @@ CREATE TABLE `notification`  (
   PRIMARY KEY (`NotificationID`) USING BTREE,
   INDEX `fk_notification_user`(`UserID` ASC) USING BTREE,
   CONSTRAINT `fk_notification_user` FOREIGN KEY (`UserID`) REFERENCES `user` (`UserID`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户通知表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户通知表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of notification
@@ -144,7 +144,7 @@ CREATE TABLE `payment`  (
   PRIMARY KEY (`PaymentID`) USING BTREE,
   INDEX `fk_payment_session`(`SessionID` ASC) USING BTREE,
   CONSTRAINT `fk_payment_session` FOREIGN KEY (`SessionID`) REFERENCES `chargingsession` (`SessionID`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '支付信息表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '支付信息表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of payment
@@ -163,7 +163,7 @@ CREATE TABLE `permission`  (
   INDEX `fk_admin_permission`(`AdminID` ASC) USING BTREE,
   CONSTRAINT `fk_admin_permission` FOREIGN KEY (`AdminID`) REFERENCES `admin` (`AdminID`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `chk_access_level_range` CHECK (`AccessLevel` in (0,1,2,3))
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '管理员权限表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '管理员权限表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of permission
@@ -182,10 +182,11 @@ CREATE TABLE `user`  (
   `Location` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '所在地理位置',
   PRIMARY KEY (`UserID`) USING BTREE,
   CONSTRAINT `chk_phone_format` CHECK (regexp_like(`Phone`,_utf8mb4'^[1][3-9][0-9]{9}$'))
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户信息表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户信息表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of user
 -- ----------------------------
+INSERT INTO `user` VALUES ('666', 'lc', '18510207636', 0, '123456', '1');
 
 SET FOREIGN_KEY_CHECKS = 1;
