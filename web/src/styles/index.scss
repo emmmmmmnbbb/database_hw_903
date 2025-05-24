@@ -1,0 +1,11 @@
+// 引入清除默认样式
+@import "./reset.scss";
+
+.el-table .el-table__header-wrapper th {
+  font-weight: bold;
+  color: #303133;
+}
+
+.el-select {
+  width: 200px !important;
+}

@@ -1,29 +1,25 @@
 import jwt
-import datetime
 import time
-from jwt.exceptions import ExpiredSignatureError
 
-# 全局密钥
-secret = '12asdffa2323'  #自定义密钥
+# JWT配置
+JWT_SECRET = "charging_jwt_secret_2024"  # JWT 密钥
+JWT_EXPIRE = 24 * 60 * 60  # token有效期24小时
 
-
-# 生成token
-def encode_func(user):
-    # user = {'id': 1, 'password':12121}
-    dic = {
-        'exp': datetime.datetime.now() + datetime.timedelta(days=1),  # 过期时间
-        'iat': datetime.datetime.now() - datetime.timedelta(days=1),  # 开始时间
-        'iss': '903',  # 签发者
-        'data': user
+def generateToken(data):
+    """生成token"""
+    payload = {
+        "user": data,  # 用户数据
+        "exp": int(time.time()) + JWT_EXPIRE  # 过期时间
     }
-    encoded = jwt.encode(dic, secret, algorithm='HS256')
-    return encoded
+    return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
 
-
-# 解析token
-def decode_func(token):
-    decode = jwt.decode(token, secret, issuer='903', algorithms=['HS256'])
-    print(decode)
-    # 返回解码出来的data
-    return decode['data']
+def decodeToken(token):
+    """验证token"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+        if payload["exp"] < time.time():
+            return None
+        return payload["user"]
+    except:
+        return None
 

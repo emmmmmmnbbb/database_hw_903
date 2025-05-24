@@ -5,542 +5,538 @@ from flask_sqlalchemy import SQLAlchemy
 import auth
 import datetime
 import time
-# from redis import StrictRedis  # 暂时注释掉Redis
 from flask_cors import CORS
-from flask_cors import cross_origin
-
-# 注释掉Redis相关代码
-# redis_store = StrictRedis(host=BaseConfig.REDIS_HOST, port=BaseConfig.REDIS_PORT, decode_responses=True)
+import os
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-
-# 添加配置数据库
 app.config.from_object(BaseConfig)
-# 初始化数据库ORM
 db = SQLAlchemy(app)
-# 启用CORS
 CORS(app, supports_credentials=True)
 
 # 检查数据库连接
 with app.app_context():
     with db.engine.connect() as conn:
-        rs = conn.execute(text("select 1"))
+        rs = conn.execute(text("SELECT 1"))
         print(rs.fetchone())
 
-# 修改所有路由，去掉/api前缀
-# 用户登录
-@app.route("/login", methods=["POST"])
-@cross_origin()
+# ---------------------------
+# 用户相关接口
+# ---------------------------
+@app.route("/user/login", methods=["POST"])
 def user_login():
-    username = request.json.get("username").strip()
-    password = request.json.get("password").strip()
-    user_type = request.json.get("type")
-    
     try:
-        # 使用参数化查询防止SQL注入
-        sql = text('SELECT * FROM user WHERE UserName = :username AND Password = :password AND Role = :role')
-        data = db.session.execute(sql, {
-            'username': username, 
-            'password': password,
-            'role': 0 if user_type == 'admin' else 1
-        }).first()
-        
-        if data:
-            user = {
-                'id': data.UserID,
-                'username': data.UserName,
-                'role': data.Role,
-                'location': data.Location
+        username = request.json.get("username")
+        password = request.json.get("password")
+        sql = text('''
+            SELECT id, username, phone, role_id, head_pic, sex, money
+            FROM user
+            WHERE username = :username AND password = :password
+        ''')
+        user = db.session.execute(sql, {"username": username, "password": password}).first()
+        if user:
+            data = {
+                "id": user.id,
+                "username": user.username,
+                "roleId": user.role_id,
+                "phone": user.phone,
+                "headPic": user.head_pic,
+                "sex": user.sex,
+                "money": float(user.money or 0)
             }
-            token = auth.encode_func(user)
-            return jsonify({"status": 200, "msg": "登录成功", "token": token})
-        else:
-            # 打印调试信息
-            print(f"Login failed for username: {username}, type: {user_type}")
-            return jsonify({"status": 1000, "msg": "用户名或密码错误"})
-            
+            token = auth.generateToken(data)
+            return jsonify({"code": 0, "msg": "登录成功", "token": token, "data": data})
+        return jsonify({"code": 1, "msg": "用户名或密码错误"})
     except Exception as e:
-        print(f"Login error: {str(e)}")
-        return jsonify({"status": 1000, "msg": f"登录失败: {str(e)}"})
+        return jsonify({"code": 1, "msg": f"登录失败: {str(e)}"})
 
-# 用户注册
-@app.route("/register", methods=["POST"])
-@cross_origin()
-def user_register():
-    rq = request.json
-    username = rq.get("username")
-    password = rq.get("password")
-    phone = rq.get("phone")
-    location = rq.get("location", "未知")
-    
-    # 检查用户是否已存在
-    data = db.session.execute(text('select * from user where UserName="{0}" or Phone="{1}"'.format(username, phone))).fetchall()
-    if data:
-        return jsonify({"status": 1000, "msg": "用户名或手机号已存在"})
-    
-    # 生成用户ID
-    user_id = f"U{int(time.time()*1000)}"
-    
-    # 创建新用户
-    sql = '''insert into user(UserID, UserName, Phone, Role, Password, Location) 
-            values("{0}", "{1}", "{2}", 1, "{3}", "{4}")'''.format(
-            user_id, username, phone, password, location)
+@app.route("/user/check_login", methods=["POST"])
+def check_login():
     try:
-        db.session.execute(text(sql))
+        token = request.json.get("token")
+        data = auth.decodeToken(token)
+        return jsonify({"code": 0, "data": data})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"登录验证失败: {str(e)}"})
+
+# 用户列表接口
+@app.route("/user/list", methods=["POST"])
+def user_list():
+    try:
+        form = request.json
+        page = form.get("page", 1)
+        size = form.get("size", 10)
+        param = form.get("param", {})
+        username = param.get("username", "")
+        role_id = param.get("roleId", 0)
+
+        # 构建查询条件
+        sql = '''
+            SELECT id, username, phone, role_id, head_pic, sex, money, rate
+            FROM user
+            WHERE (:username = '' OR username LIKE :username_pattern)
+              AND (:role_id = 0 OR role_id = :role_id)
+            LIMIT :limit OFFSET :offset
+        '''
+        count_sql = '''
+            SELECT COUNT(*) as total
+            FROM user
+            WHERE (:username = '' OR username LIKE :username_pattern)
+              AND (:role_id = 0 OR role_id = :role_id)
+        '''
+        params = {
+            "username": username,
+            "username_pattern": f"%{username}%",
+            "role_id": role_id,
+            "limit": size,
+            "offset": (page - 1) * size,
+        }
+
+        # 查询用户列表
+        data = db.session.execute(text(sql), params).fetchall()
+        users = [{
+            "id": row.id,
+            "username": row.username,
+            "phone": row.phone,
+            "roleId": row.role_id,
+            "headPic": row.head_pic,
+            "sex": row.sex,
+            "money": float(row.money or 0),
+            "rate": row.rate
+        } for row in data]
+
+        # 查询总数
+        total = db.session.execute(text(count_sql), params).scalar()
+
+        return jsonify({"code": 0, "data": {"list": users, "total": total}})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"获取用户列表失败: {str(e)}"})
+
+# 保存用户信息接口
+@app.route("/user/save", methods=["POST"])
+def user_save():
+    try:
+        form = request.json
+        if not form.get("id"):
+            # 新增用户
+            user_id = "U" + str(int(time.time() * 1000))  # 生成唯一ID
+            sql = text('''
+                INSERT INTO user(username, password, phone, role_id, head_pic, sex, money, rate)
+                VALUES(:username, :password, :phone, :role_id, :head_pic, :sex, :money, :rate)
+            ''')
+            db.session.execute(sql, {
+                "id": user_id,
+                "username": form.get("username"),
+                "password": form.get("password"),
+                "phone": form.get("phone"),
+                "role_id": form.get("roleId"),
+                "head_pic": form.get("headPic"),
+                "sex": form.get("sex"),
+                "money": form.get("money", 0),
+                "rate": form.get("rate", 100),
+            })
+        else:
+            # 更新用户
+            sql = text('''
+                UPDATE user
+                SET username = :username, password = :password, phone = :phone,
+                    role_id = :role_id, head_pic = :head_pic, sex = :sex,
+                    money = :money, rate = :rate
+                WHERE id = :id
+            ''')
+            db.session.execute(sql, {
+                "id": form.get("id"),
+                "username": form.get("username"),
+                "password": form.get("password"),
+                "phone": form.get("phone"),
+                "role_id": form.get("roleId"),
+                "head_pic": form.get("headPic"),
+                "sex": form.get("sex"),
+                "money": form.get("money", 0),
+                "rate": form.get("rate", 100),
+            })
         db.session.commit()
-        return jsonify({"status": 200, "msg": "注册成功"})
+        return jsonify({"code": 0, "msg": "用户保存成功"})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"status": 1000, "msg": f"注册失败: {str(e)}"})
+        return jsonify({"code": 1, "msg": f"用户保存失败: {str(e)}"})
 
-# 获取充电站列表
-@app.route("/stations", methods=["GET"])
-@cross_origin()
-def get_stations():
-    data = db.session.execute(text('''
-        SELECT c.Location, 
-            COUNT(CASE WHEN c.Status = 0 THEN 1 END) as available_piles,
-            COUNT(CASE WHEN c.Status = 1 THEN 1 END) as busy_piles,
-            COUNT(CASE WHEN c.Status = 2 THEN 1 END) as maintenance_piles,
-            AVG(c.PricePerKWh) as avg_price
-        FROM charger c
-        GROUP BY c.Location
-    ''')).fetchall()
-    
-    stations = []
-    for row in data:
-        station = {
-            'id': len(stations) + 1,  # 生成临时ID
-            'location': row.Location,
-            'price_per_kwh': float(row.avg_price),
-            'availablePiles': row.available_piles or 0,
-            'busyPiles': row.busy_piles or 0,
-            'maintenancePiles': row.maintenance_piles or 0,
-            'estimatedWaitTime': (row.busy_piles or 0) * 30  # 简单估算等待时间
-        }
-        stations.append(station)
-    
-    return jsonify({"status": 200, "stations": stations})
-
-# 获取充电桩状态
-@app.route("/stations/<string:location>/piles", methods=["GET"])
-@cross_origin()
-def get_station_piles(location):
-    data = db.session.execute(text('''
-        SELECT * FROM charger 
-        WHERE Location = :location
-    '''), {"location": location}).fetchall()
-    
-    piles = []
-    for row in data:
-        pile = {
-            'id': row.ChargerID,
-            'location': row.Location,
-            'status': row.Status,  # 0=正常，1=充电中，2=损坏
-            'price_per_kwh': float(row.PricePerKWh)
-        }
-        piles.append(pile)
-    
-    return jsonify({"status": 200, "piles": piles})
-
-# 开始充电
-@app.route("/charging/start", methods=["POST"])
-@cross_origin()
-def start_charging():
-    rq = request.json
-    user = auth.decode_func(request.headers.get('token'))
-    
-    # 生成会话ID
-    session_id = f"S{int(time.time()*1000)}"
-    
+# ---------------------------
+# 电站相关接口
+# ---------------------------
+@app.route("/station/list", methods=["GET", "POST"])
+def station_list():
     try:
-        # 更新充电桩状态
-        db.session.execute(text('''
-            UPDATE charger 
-            SET Status = 1
-            WHERE ChargerID = :charger_id
-        '''), {"charger_id": rq['charger_id']})
-        
-        # 创建充电会话记录
-        db.session.execute(text('''
+        form = request.json
+        page = form.get("page", 1)
+        size = form.get("size", 10)
+        param = form.get("param", {})
+        name = param.get("name", "")
+        operator_id = param.get("operatorId", 0)
+
+        # 构建查询条件
+        sql = '''
+            SELECT s.id, s.name, s.location, s.photo, s.charge_num, s.available_charge_num,
+                   o.name as operator_name
+            FROM station s
+            LEFT JOIN operator o ON s.operator_id = o.id
+            WHERE (:name = '' OR s.name LIKE :name_pattern)
+              AND (:operator_id = 0 OR s.operator_id = :operator_id)
+            LIMIT :limit OFFSET :offset
+        '''
+        count_sql = '''
+            SELECT COUNT(*) as total
+            FROM station s
+            WHERE (:name = '' OR s.name LIKE :name_pattern)
+              AND (:operator_id = 0 OR s.operator_id = :operator_id)
+        '''
+        params = {
+            "name": name,
+            "name_pattern": f"%{name}%",
+            "operator_id": operator_id,
+            "limit": size,
+            "offset": (page - 1) * size,
+        }
+
+        # 查询电站列表
+        data = db.session.execute(text(sql), params).fetchall()
+        print("Station list data:", data)  # 调试日志
+        stations = [{
+            "id": row.id,
+            "name": row.name,
+            "location": row.location,
+            "photo": row.photo,
+            "charge_num": row.charge_num,
+            "available_charge_num": row.available_charge_num,
+            "operator_name": row.operator_name
+        } for row in data]
+
+        # 查询总数
+        total = db.session.execute(text(count_sql), params).scalar()
+
+        return jsonify({"code": 0, "data": {"list": stations, "total": total}})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"获取电站列表失败: {str(e)}"})
+
+@app.route("/station/all", methods=["GET", "POST"])
+def station_all():
+    try:
+        # 返回电站列表（简要信息，仅供下拉选择使用）
+        sql = text('''
+            SELECT id, name
+            FROM station
+        ''')
+        data = db.session.execute(sql).fetchall()
+        stations = [{"id": row.id, "name": row.name} for row in data]
+        return jsonify({"code": 0, "data": stations})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"获取全部电站失败: {str(e)}"})
+
+@app.route("/station/save", methods=["POST"])
+def station_save():
+    try:
+        form = request.json
+        now = datetime.datetime.now()
+        # 判断是新增还是更新（依靠 id 是否存在）
+        if not form.get("id"):
+            # 新增时生成ID，可使用时间戳拼接
+            station_id = "S" + str(int(time.time() * 1000))
+            sql = text('''
+                INSERT INTO station(id, name, location, photo, charge_num, available_charge_num, operator_id)
+                VALUES(:id, :name, :location, :photo, 0, 0, :operator_id)
+            ''')
+            db.session.execute(sql, {
+                "id": station_id,
+                "name": form.get("name"),
+                "location": form.get("location"),
+                "photo": form.get("photo"),
+                "operator_id": form.get("operatorId")
+            })
+        else:
+            # 更新
+            sql = text('''
+                UPDATE station
+                SET name=:name, location=:location, photo=:photo, operator_id=:operator_id
+                WHERE id=:id
+            ''')
+            db.session.execute(sql, {
+                "id": form.get("id"),
+                "name": form.get("name"),
+                "location": form.get("location"),
+                "photo": form.get("photo"),
+                "operator_id": form.get("operatorId")
+            })
+        db.session.commit()
+        return jsonify({"code": 0, "msg": "电站保存成功"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"code": 1, "msg": f"电站保存失败: {str(e)}"})
+
+@app.route("/station/delete", methods=["POST"])
+def station_delete():
+    try:
+        form = request.json
+        station_id = form.get("id")
+        sql = text('DELETE FROM station WHERE id=:id')
+        db.session.execute(sql, {"id": station_id})
+        db.session.commit()
+        return jsonify({"code": 0, "msg": "电站删除成功"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"code": 1, "msg": f"电站删除失败: {str(e)}"})
+
+# ---------------------------
+# 充电桩相关接口
+# ---------------------------
+@app.route("/charge/list", methods=["GET", "POST"])
+def charge_list():
+    try:
+        # 如果有分页参数，可根据前端传入的 page, size, param 进行过滤，这里简单返回所有数据
+        sql = text('''
+            SELECT c.id, c.name, c.photo, c.state, c.price, c.description, s.name as station_name
+            FROM charge c
+            LEFT JOIN station s ON c.station_id = s.id
+        ''')
+        data = db.session.execute(sql).fetchall()
+        # 调试日志
+        print("Charge list data:", data)
+        charges = [{
+            "id": row.id,
+            "name": row.name,
+            "photo": row.photo,
+            "state": row.state,
+            "price": float(row.price),
+            "description": row.description,
+            "station_name": row.station_name
+        } for row in data]
+        return jsonify({"code": 0, "data": charges})
+    except Exception as e:
+        print("Error in /charge/list:", str(e))
+        return jsonify({"code": 1, "msg": f"获取充电桩列表失败: {str(e)}"})
+
+@app.route("/charge/save", methods=["POST"])
+def charge_save():
+    try:
+        form = request.json
+        if not form.get("id"):
+            charge_id = "C" + str(int(time.time() * 1000))
+            sql = text('''
+                INSERT INTO charge(id, name, station_id, photo, state, price, description)
+                VALUES(:id, :name, :station_id, :photo, :state, :price, :description)
+            ''')
+            db.session.execute(sql, {
+                "id": charge_id,
+                "name": form.get("name"),
+                "station_id": form.get("stationId"),
+                "photo": form.get("photo"),
+                "state": form.get("state"),
+                "price": form.get("price"),
+                "description": form.get("description")
+            })
+        else:
+            sql = text('''
+                UPDATE charge
+                SET name=:name, station_id=:station_id, photo=:photo, state=:state, price=:price, description=:description
+                WHERE id=:id
+            ''')
+            db.session.execute(sql, {
+                "id": form.get("id"),
+                "name": form.get("name"),
+                "station_id": form.get("stationId"),
+                "photo": form.get("photo"),
+                "state": form.get("state"),
+                "price": form.get("price"),
+                "description": form.get("description")
+            })
+        db.session.commit()
+        return jsonify({"code": 0, "msg": "充电桩保存成功"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"code": 1, "msg": f"充电桩保存失败: {str(e)}"})
+
+@app.route("/charge/delete", methods=["POST"])
+def charge_delete():
+    try:
+        form = request.json
+        charge_id = form.get("id")
+        sql = text('DELETE FROM charge WHERE id=:id')
+        db.session.execute(sql, {"id": charge_id})
+        db.session.commit()
+        return jsonify({"code": 0, "msg": "充电桩删除成功"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"code": 1, "msg": f"充电桩删除失败: {str(e)}"})
+
+# ---------------------------
+# 运营商相关接口
+# ---------------------------
+@app.route("/operator/all", methods=["GET", "POST"])
+def operator_all():
+    try:
+        sql = text('SELECT id, name FROM operator')
+        data = db.session.execute(sql).fetchall()
+        operators = [{"id": row.id, "name": row.name} for row in data]
+        return jsonify({"code": 0, "data": operators})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"获取运营商列表失败: {str(e)}"})
+
+# ---------------------------
+# 文件上传（照片上传）接口
+# ---------------------------
+UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+@app.route("/photo/upload", methods=["POST"])
+def photo_upload():
+    try:
+        if "photo" not in request.files:
+            return jsonify({"code": 1, "msg": "未提供文件"})
+        file = request.files["photo"]
+        if file.filename == "":
+            return jsonify({"code": 1, "msg": "文件名为空"})
+        filename = secure_filename(file.filename)
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        # 返回文件名，前端可根据VITE_SERVER地址拼接获取图片
+        return jsonify({"code": 0, "msg": "上传成功", "data": filename})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"上传失败: {str(e)}"})
+
+# ---------------------------
+# 充电会话相关接口
+# ---------------------------
+@app.route("/charging/start", methods=["POST"])
+def start_charging():
+    try:
+        user_token = request.headers.get("token")
+        user = auth.decodeToken(user_token)
+        rq = request.json
+        charger_id = rq.get("chargerId")
+        session_id = "S" + str(int(time.time() * 1000))
+        start_time = datetime.datetime.now()
+        # 更新充电桩状态为“充电中”（假设：1-可用，2-充电中）
+        sql_update = text('''
+            UPDATE charge
+            SET state = 2
+            WHERE id = :charger_id AND state = 1
+        ''')
+        result = db.session.execute(sql_update, {"charger_id": charger_id})
+        if result.rowcount == 0:
+            return jsonify({"code": 1, "msg": "充电桩不可用或正在充电"})
+        # 插入充电会话记录（假设表 chargingsession 字段：SessionID, UserID, ChargerID, StartTime, EndTime, EnergyUsed, Cost）
+        sql_insert = text('''
             INSERT INTO chargingsession(SessionID, UserID, ChargerID, StartTime, EnergyUsed, Cost)
             VALUES(:session_id, :user_id, :charger_id, :start_time, 0, 0)
-        '''), {
+        ''')
+        db.session.execute(sql_insert, {
             "session_id": session_id,
-            "user_id": user['id'],
-            "charger_id": rq['charger_id'],
-            "start_time": datetime.datetime.now()
+            "user_id": user["id"],
+            "charger_id": charger_id,
+            "start_time": start_time
         })
-        
         db.session.commit()
-        return jsonify({"status": 200, "msg": "充电开始", "session_id": session_id})
+        return jsonify({"code": 0, "msg": "充电开始", "session_id": session_id})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"status": 1000, "msg": f"操作失败: {str(e)}"})
+        return jsonify({"code": 1, "msg": f"开始充电失败: {str(e)}"})
 
-# 结束充电
 @app.route("/charging/stop", methods=["POST"])
-@cross_origin()
 def stop_charging():
-    user = auth.decode_func(request.headers.get('token'))
-    
-    # 获取当前充电会话
-    data = db.session.execute(text('''
-        SELECT s.*, c.PricePerKWh
-        FROM chargingsession s
-        JOIN charger c ON s.ChargerID = c.ChargerID
-        WHERE s.UserID = :user_id AND s.EndTime IS NULL
-    '''), {"user_id": user['id']}).first()
-    
-    if not data:
-        return jsonify({"status": 1000, "msg": "没有进行中的充电"})
-    
-    end_time = datetime.datetime.now()
-    duration = (end_time - data.StartTime).total_seconds() / 3600  # 小时
-    energy_used = duration * 7  # 假设充电功率为7kW/h
-    cost = energy_used * float(data.PricePerKWh)
-    
     try:
-        # 更新充电会话
-        db.session.execute(text('''
-            UPDATE chargingsession 
-            SET EndTime = :end_time,
-                EnergyUsed = :energy_used,
-                Cost = :cost
+        user_token = request.headers.get("token")
+        user = auth.decodeToken(user_token)
+        # 查询用户当前未结束的充电会话
+        sql_sel = text('''
+            SELECT s.SessionID, s.ChargerID, s.StartTime, c.price, c.id as charger_id
+            FROM chargingsession s
+            JOIN charge c ON s.ChargerID = c.id
+            WHERE s.UserID = :user_id AND s.EndTime IS NULL
+        ''')
+        session_data = db.session.execute(sql_sel, {"user_id": user["id"]}).first()
+        if not session_data:
+            return jsonify({"code": 1, "msg": "未找到进行中的充电会话"})
+        end_time = datetime.datetime.now()
+        # 计算充电时长（小时）
+        duration = (end_time - session_data.StartTime).total_seconds() / 3600
+        # 假设充电功率为 7kW，计算能量（单位：kWh）
+        energy_used = duration * 7
+        # 计算费用，使用充电桩价格（单位：元/分钟，此处转换为元/小时）
+        cost = energy_used * float(session_data.price) * 60
+        sql_update = text('''
+            UPDATE chargingsession
+            SET EndTime = :end_time, EnergyUsed = :energy_used, Cost = :cost
             WHERE SessionID = :session_id
-        '''), {
+        ''')
+        db.session.execute(sql_update, {
             "end_time": end_time,
             "energy_used": energy_used,
             "cost": cost,
-            "session_id": data.SessionID
+            "session_id": session_data.SessionID
         })
-        
-        # 更新充电桩状态
-        db.session.execute(text('''
-            UPDATE charger 
-            SET Status = 0
-            WHERE ChargerID = :charger_id
-        '''), {"charger_id": data.ChargerID})
-        
+        # 更新充电桩状态恢复为“可用”
+        sql_charger = text('''
+            UPDATE charge
+            SET state = 1
+            WHERE id = :charger_id
+        ''')
+        db.session.execute(sql_charger, {"charger_id": session_data.charger_id})
         db.session.commit()
         return jsonify({
-            "status": 200, 
-            "msg": "充电已结束",
+            "code": 0,
+            "msg": "充电结束",
             "energy_used": round(energy_used, 2),
             "cost": round(cost, 2)
         })
     except Exception as e:
         db.session.rollback()
-        return jsonify({"status": 1000, "msg": f"操作失败: {str(e)}"})
+        return jsonify({"code": 1, "msg": f"结束充电失败: {str(e)}"})
 
-# 获取用户当前充电状态
-@app.route("/charging/status", methods=["GET"])
-@cross_origin()
-def get_charging_status():
-    user = auth.decode_func(request.headers.get('token'))
-    
-    data = db.session.execute(text('''
-        SELECT s.*, c.Location, c.PricePerKWh
-        FROM chargingsession s
-        JOIN charger c ON s.ChargerID = c.ChargerID
-        WHERE s.UserID = :user_id AND s.EndTime IS NULL
-    '''), {"user_id": user['id']}).first()
-    
-    if not data:
-        return jsonify({"status": 1000, "msg": "没有进行中的充电"})
-    
-    duration = (datetime.datetime.now() - data.StartTime).total_seconds() / 3600  # 小时
-    energy_used = duration * 7  # 假设充电功率为7kW/h
-    
-    charging = {
-        'session_id': data.SessionID,
-        'location': data.Location,
-        'start_time': data.StartTime.strftime('%Y-%m-%d %H:%M:%S'),
-        'duration': int(duration * 60),  # 转换为分钟
-        'energy_used': round(energy_used, 2),
-        'estimated_cost': round(energy_used * float(data.PricePerKWh), 2)
-    }
-    
-    return jsonify({"status": 200, "charging": charging})
+@app.route('/user/logout', methods=['POST'])
+def logout():
+    # 清除用户会话或令牌
+    return jsonify({"code": 0, "msg": "登出成功"})
 
-# 获取用户充电历史
-@app.route("/charging/history", methods=["GET"])
-@cross_origin()
-def get_charging_history():
-    user = auth.decode_func(request.headers.get('token'))
-    
-    data = db.session.execute(text('''
-        SELECT s.*, c.Location, c.PricePerKWh
-        FROM chargingsession s
-        JOIN charger c ON s.ChargerID = c.ChargerID
-        WHERE s.UserID = :user_id AND s.EndTime IS NOT NULL
-        ORDER BY s.StartTime DESC
-    '''), {"user_id": user['id']}).fetchall()
-    
-    records = []
-    for row in data:
-        duration = (row.EndTime - row.StartTime).total_seconds() / 3600  # 小时
-        record = {
-            'session_id': row.SessionID,
-            'location': row.Location,
-            'start_time': row.StartTime.strftime('%Y-%m-%d %H:%M:%S'),
-            'end_time': row.EndTime.strftime('%Y-%m-%d %H:%M:%S'),
-            'duration': int(duration * 60),  # 转换为分钟
-            'energy_used': float(row.EnergyUsed),
-            'cost': float(row.Cost)
-        }
-        records.append(record)
-    
-    return jsonify({"status": 200, "records": records})
-
-# 更新用户个人信息
-@app.route("/user/profile", methods=["PUT"])
-@cross_origin()
-def update_profile():
-    user = auth.decode_func(request.headers.get('token'))
-    rq = request.json
-    
+@app.route('/user/register', methods=['POST'])
+def register():
     try:
-        # 更新用户信息
-        db.session.execute(text('''
-            UPDATE user 
-            SET Phone = :phone,
-                Location = :location
-            WHERE UserID = :user_id
-        '''), {
-            "phone": rq.get('phone'),
-            "location": rq.get('location'),
-            "user_id": user['id']
+        data = request.json
+        username = data.get("username")
+        password = data.get("password")
+        phone = data.get("phone")
+        head_pic = data.get("headPic", "common/no_image.jpg")  # 默认头像
+        sex = data.get("sex", 3)  # 默认性别未知
+        role_id = data.get("roleId", 1)  # 默认角色为普通用户
+        rate = data.get("rate", 100)  # 默认信誉积分
+        money = data.get("money", 0)  # 默认余额
+
+        # 检查必填字段
+        if not username or not password or not phone:
+            return jsonify({"code": 1, "msg": "用户名、密码和手机号为必填项"})
+
+        # 检查用户名是否已存在
+        sql_check = text('SELECT COUNT(*) FROM user WHERE username = :username')
+        existing_user_count = db.session.execute(sql_check, {"username": username}).scalar()
+        if existing_user_count > 0:
+            return jsonify({"code": 1, "msg": "用户名已存在"})
+
+        # 插入用户数据
+        # user_id = "U" + str(int(time.time() * 1000))  # 生成唯一用户ID
+        sql_insert = text('''
+            INSERT INTO user ( username, password, phone)
+            VALUES (:username, :password, :phone)
+        ''')
+        db.session.execute(sql_insert, {
+            "username": username,
+            "password": password,
+            "phone": phone,
+
         })
-        
         db.session.commit()
-        return jsonify({"status": 200, "msg": "个人信息更新成功"})
+        return jsonify({"code": 0, "msg": "注册成功"})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"status": 1000, "msg": f"更新失败: {str(e)}"})
+        return jsonify({"code": 1, "msg": f"注册失败: {str(e)}"})
 
-# 修改密码
-@app.route("/user/password", methods=["PUT"])
-@cross_origin()
-def change_password():
-    user = auth.decode_func(request.headers.get('token'))
-    rq = request.json
-    old_password = rq.get('oldPassword')
-    new_password = rq.get('newPassword')
-    
-    # 验证原密码
-    data = db.session.execute(text('''
-        SELECT * FROM user 
-        WHERE UserID = :user_id AND Password = :password
-    '''), {
-        "user_id": user['id'],
-        "password": old_password
-    }).first()
-    
-    if not data:
-        return jsonify({"status": 1000, "msg": "原密码错误"})
-    
-    try:
-        # 更新密码
-        db.session.execute(text('''
-            UPDATE user 
-            SET Password = :new_password
-            WHERE UserID = :user_id
-        '''), {
-            "new_password": new_password,
-            "user_id": user['id']
-        })
-        
-        db.session.commit()
-        return jsonify({"status": 200, "msg": "密码修改成功"})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"status": 1000, "msg": f"修改失败: {str(e)}"})
-
-# 管理端API
-# 获取所有进行中的充电记录
-@app.route("/manager/charging/active", methods=["GET"])
-@cross_origin()
-def get_active_records():
-    data = db.session.execute(text('''
-        SELECT s.*, u.UserName, c.Location
-        FROM chargingsession s
-        JOIN user u ON s.UserID = u.UserID
-        JOIN charger c ON s.ChargerID = c.ChargerID
-        WHERE s.EndTime IS NULL
-        ORDER BY s.StartTime DESC
-    ''')).fetchall()
-    
-    records = []
-    for row in data:
-        duration = (datetime.datetime.now() - row.StartTime).total_seconds() / 3600  # 小时
-        energy_used = duration * 7  # 假设充电功率为7kW/h
-        
-        record = {
-            'session_id': row.SessionID,
-            'user_name': row.UserName,
-            'location': row.Location,
-            'start_time': row.StartTime.strftime('%Y-%m-%d %H:%M:%S'),
-            'duration': int(duration * 60),  # 转换为分钟
-            'energy_used': round(energy_used, 2)
-        }
-        records.append(record)
-    
-    return jsonify({"status": 200, "records": records})
-
-# 获取所有历史充电记录
-@app.route("/manager/charging/history", methods=["GET"])
-@cross_origin()
-def get_history_records():
-    data = db.session.execute(text('''
-        SELECT s.*, u.UserName, c.Location
-        FROM chargingsession s
-        JOIN user u ON s.UserID = u.UserID
-        JOIN charger c ON s.ChargerID = c.ChargerID
-        WHERE s.EndTime IS NOT NULL
-        ORDER BY s.StartTime DESC
-    ''')).fetchall()
-    
-    records = []
-    for row in data:
-        record = {
-            'session_id': row.SessionID,
-            'user_name': row.UserName,
-            'location': row.Location,
-            'start_time': row.StartTime.strftime('%Y-%m-%d %H:%M:%S'),
-            'end_time': row.EndTime.strftime('%Y-%m-%d %H:%M:%S'),
-            'duration': int((row.EndTime - row.StartTime).total_seconds() / 60),  # 转换为分钟
-            'energy_used': float(row.EnergyUsed),
-            'cost': float(row.Cost)
-        }
-        records.append(record)
-    
-    return jsonify({"status": 200, "records": records})
-
-# 管理端：添加充电站
-@app.route("/manager/stations", methods=["POST"])
-@cross_origin()
-def add_station():
-    user = auth.decode_func(request.headers.get('token'))
-    if user['role'] != 0:  # 检查是否是管理员
-        return jsonify({"status": 403, "msg": "无权限执行此操作"})
-    
-    rq = request.json
-    # 生成充电桩ID
-    charger_id = f"C{int(time.time()*1000)}"
-    
-    try:
-        # 添加新充电桩
-        db.session.execute(text('''
-            INSERT INTO charger(ChargerID, Manager, Location, Status, PricePerKWh)
-            VALUES(:charger_id, :manager_id, :location, 0, :price)
-        '''), {
-            "charger_id": charger_id,
-            "manager_id": user['id'],
-            "location": rq.get('location'),
-            "price": rq.get('pricePerKWh')
-        })
-        
-        db.session.commit()
-        return jsonify({"status": 200, "msg": "充电站添加成功", "charger_id": charger_id})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"status": 1000, "msg": f"添加失败: {str(e)}"})
-
-# 管理端：更新充电站信息
-@app.route("/manager/stations/<string:charger_id>", methods=["PUT"])
-@cross_origin()
-def update_station(charger_id):
-    user = auth.decode_func(request.headers.get('token'))
-    if user['role'] != 0:
-        return jsonify({"status": 403, "msg": "无权限执行此操作"})
-    
-    rq = request.json
-    try:
-        # 更新充电站信息
-        db.session.execute(text('''
-            UPDATE charger 
-            SET Location = :location,
-                PricePerKWh = :price,
-                Status = :status
-            WHERE ChargerID = :charger_id
-        '''), {
-            "location": rq.get('location'),
-            "price": rq.get('pricePerKWh'),
-            "status": rq.get('status'),
-            "charger_id": charger_id
-        })
-        
-        db.session.commit()
-        return jsonify({"status": 200, "msg": "充电站信息更新成功"})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"status": 1000, "msg": f"更新失败: {str(e)}"})
-
-# 管理端：删除充电站
-@app.route("/manager/stations/<string:charger_id>", methods=["DELETE"])
-@cross_origin()
-def delete_station(charger_id):
-    user = auth.decode_func(request.headers.get('token'))
-    if user['role'] != 0:
-        return jsonify({"status": 403, "msg": "无权限执行此操作"})
-    
-    try:
-        # 检查是否有进行中的充电
-        active_session = db.session.execute(text('''
-            SELECT * FROM chargingsession 
-            WHERE ChargerID = :charger_id AND EndTime IS NULL
-        '''), {"charger_id": charger_id}).first()
-        
-        if active_session:
-            return jsonify({"status": 1000, "msg": "该充电桩正在使用中，无法删除"})
-        
-        # 删除充电桩
-        db.session.execute(text('''
-            DELETE FROM charger 
-            WHERE ChargerID = :charger_id
-        '''), {"charger_id": charger_id})
-        
-        db.session.commit()
-        return jsonify({"status": 200, "msg": "充电站删除成功"})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"status": 1000, "msg": f"删除失败: {str(e)}"})
-
-# 获取充电站详细信息
-@app.route("/stations/<string:station_id>", methods=["GET"])
-@cross_origin()
-def get_station_detail(station_id):
-    data = db.session.execute(text('''
-        SELECT c.*, a.AdminName as manager_name
-        FROM charger c
-        LEFT JOIN admin a ON c.Manager = a.AdminID
-        WHERE c.ChargerID = :station_id
-    '''), {"station_id": station_id}).first()
-    
-    if not data:
-        return jsonify({"status": 404, "msg": "充电站不存在"})
-    
-    station = {
-        'id': data.ChargerID,
-        'location': data.Location,
-        'status': data.Status,
-        'pricePerKWh': float(data.PricePerKWh),
-        'manager': {
-            'id': data.Manager,
-            'name': data.manager_name
-        }
-    }
-    
-    return jsonify({"status": 200, "station": station})
-
-if __name__ == '__main__':
-    @app.route("/", methods=["GET"]) 
-    @cross_origin()
-    def index():
-        return jsonify({
-            "status": 200,
-            "msg": "API服务运行中"
-        })
-
-    app.run(debug=True, host='127.0.0.1', port=5000)
+if __name__ == "__main__":
+    app.run(debug=True, host="127.0.0.1", port=5000)
