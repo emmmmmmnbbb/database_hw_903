@@ -12,9 +12,10 @@ const menuList = [
 		icon: "List",
 		name: "统计管理",
 		path: "/tj",
+		// roles: [2], // 只有管理员可见
 		children: [
 			{
-				id: 3,
+				id: 21,
 				icon: "List",
 				name: "统计管理",
 				path: "/tjList"
@@ -25,13 +26,14 @@ const menuList = [
 
 
 	{
-		id: 2,
+		id: 3,
 		icon: "UserFilled",
 		name: "用户管理",
 		path: "/user",
+		// roles: [2], // 只有管理员可见
 		children: [
 			{
-				id: 3,
+				id: 31,
 				icon: "List",
 				name: "用户列表",
 				path: "/userList"
@@ -42,6 +44,7 @@ const menuList = [
 		id: 4,
 		icon: "List",
 		name: "公告管理",
+		// roles: [2], // 只有管理员可见
 		path: "/notice",
 		children: [
 			{
@@ -53,26 +56,26 @@ const menuList = [
 		]
 	},
 	// ------------------------------
-	{
-		id: 6,
-		icon: "List",
-		name: "优惠券管理",
-		path: "/coupon",
-		children: [
-			{
-				id: 7,
-				icon: "List",
-				name: "优惠券列表",
-				path: "/couponList"
-			},
-			{
-				id: 8,
-				icon: "List",
-				name: "我的优惠券",
-				path: "/couponMyList"
-			}
-		]
-	},
+	// {
+	// 	id: 6,
+	// 	icon: "List",
+	// 	name: "优惠券管理",
+	// 	path: "/coupon",
+	// 	children: [
+	// 		{
+	// 			id: 7,
+	// 			icon: "List",
+	// 			name: "优惠券列表",
+	// 			path: "/couponList"
+	// 		},
+	// 		{
+	// 			id: 8,
+	// 			icon: "List",
+	// 			name: "我的优惠券",
+	// 			path: "/couponMyList"
+	// 		}
+	// 	]
+	// },
 	// ------------------------------
 	{
 		id: 8,
@@ -92,6 +95,7 @@ const menuList = [
 		id: 10,
 		icon: "AlarmClock",
 		name: "预约管理",
+		// roles: [2], // 只有管理员可见
 		path: "/appoint",
 		children: [
 			{
@@ -118,6 +122,7 @@ const menuList = [
 		id: 12,
 		icon: "Money",
 		name: "订单管理",
+		// roles: [2], // 只有管理员可见
 		path: "/order",
 		children: [
 			{
@@ -146,6 +151,7 @@ const menuList = [
 		id: 17,
 		icon: "ChatDotRound",
 		name: "留言管理",
+		// roles: [2], // 只有管理员可见
 		path: "/comment",
 		children: [
 			{
@@ -157,13 +163,14 @@ const menuList = [
 		]
 	},
 	{
-		id: 17,
+		id: 19,
 		icon: "ChatDotRound",
 		name: "报修管理",
+		// roles: [2], // 只有管理员可见
 		path: "/repair",
 		children: [
 			{
-				id: 18,
+				id: 20,
 				icon: "List",
 				name: "报修列表",
 				path: "/repairList"

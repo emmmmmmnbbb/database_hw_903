@@ -99,7 +99,9 @@
         ></el-table-column>
         <el-table-column label="所属运营商" :show-overflow-tooltip="true">
           <template #default="scope">
-            <span>{{ scope.row.operator_name }}</span>
+            <div>
+              {{ scope.row.operatorDTO.name }}
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -190,6 +192,7 @@
 import { ref, reactive, onMounted, computed } from "vue";
 import { ElMessage } from "element-plus";
 import Dialog from "@/components/Dialog/index.vue";
+import logoImage from "@/assets/logo.jpg"; // 导入本地图片
 import {
   axiosPostRequest,
   getSessionStorage,
@@ -238,7 +241,7 @@ const dataList = reactive({
     roleId: 1,
   },
   multipleSelection: [],
-  stationList: [], // 初始化为空数组
+  stationList: [],
   operatorList: [],
 });
 
@@ -258,7 +261,11 @@ const getLoginUser = async () => {
 };
 
 const filterPhoto = computed(() => (photo) => {
-  return import.meta.env.VITE_SERVER + "/photo/view?filename=" + photo;
+  // 直接返回本地图片
+  return logoImage;
+  
+  // 原来的代码可以注释掉
+  // return import.meta.env.VITE_SERVER + "/photo/view?filename=" + photo;
 });
 
 // 打开上传图片窗口
@@ -379,27 +386,21 @@ const getAllOperator = async () => {
   }
 };
 
-// 获取电站列表
+// 获取电站信息
 const getStationList = async () => {
-  try {
-    const response = await axiosPostRequest("/station/list");
-    console.log('Station list response:', response); // 添加调试日志
-    
-    if (response.code === 0) {
-      // 处理返回的数据
-      dataList.stationList = response.data.map(item => ({
-        ...item,
-        chargeNum: item.charge_num || 0,
-        availableChargeNum: item.available_charge_num || 0,
-        operator_name: item.operator_name || '未知运营商'
-      }));
-      paginationProps.total = response.data.length;
-    } else {
-      ElMessage.error(response.msg || '获取电站列表失败');
-    }
-  } catch (error) {
-    console.error('Get station list error:', error);
-    ElMessage.error('获取电站列表失败');
+  const response = await axiosPostRequest("/station/list", {
+    page: paginationProps.current,
+    size: paginationProps.pageSize,
+    param: {
+      name: dataList.searchParams.name,
+      operatorId: dataList.searchParams.operatorId,
+    },
+  });
+  if (response.code === 0) {
+    dataList.stationList = response.data.list;
+    paginationProps.total = response.data.total;
+  } else {
+    ElMessage.error(response.msg);
   }
 };
 </script>

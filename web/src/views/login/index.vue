@@ -175,10 +175,11 @@ const handleRegister = async () => {
 const handleLogin = async () => {
   loginLoading.value = true; //转圈
   const response = await axiosPostRequest("/user/login", loginForm);
-  if (response.code == 0) {
+  if (response.code === 200) {
     ElMessage.success(response.msg);
     setSessionStorage(response.token);//储存token
     loginFormRef.value.resetFields(); //清空表单
+    localStorage.setItem("userInfo", JSON.stringify(response.data));
     router.push("/index");
   } else {
     ElMessage.error(response.msg);

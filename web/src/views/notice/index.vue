@@ -51,14 +51,28 @@ const form = reactive({
 	content: ""
 });
 
-// 获取通知列表
 const getNoticeList = async () => {
-	const response = await axiosPostRequest("/notice/list");
-	if (response.code === 0) {
-		noticeList.value = response.data;
-	} else {
-		ElMessage.error(response.msg);
-	}
+  // 使用虚拟数据替代API调用
+  noticeList.value = [
+    {
+      id: 1,
+      title: "关于充电桩系统维护的通知",
+      content: "尊敬的用户，我们计划于2025年6月10日凌晨2:00-4:00进行系统维护，期间充电桩预约功能将暂停使用。给您带来不便，敬请谅解。",
+      addTime: "2025-06-05 10:30:00"
+    },
+    {
+      id: 2,
+      title: "东门新增充电桩设施公告",
+      content: "为满足日益增长的充电需求，我校东门已新增1个快速直流充电桩，即日起可通过系统预约使用。",
+      addTime: "2025-06-03 14:15:30"
+    },
+    {
+      id: 3,
+      title: "充电价格调整通知",
+      content: "根据最新电价政策，从2025年7月1日起，普通充电桩价格调整为2.0元/度，快充桩价格调整为2.5元/度。",
+      addTime: "2025-06-02 09:45:12"
+    }
+  ];
 };
 
 // 打开新增弹框

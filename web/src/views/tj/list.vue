@@ -58,16 +58,41 @@ let pieChart = null;
 let lineChart = null;
 
 // 获取统计数据
+// 获取统计数据
 const getTjData = async () => {
-	const response = await axiosPostRequest("/order/tongji");
-	console.log(response);
-	monthTj.value = response.data;
+  // 使用虚拟数据替代API调用
+  const mockData = {
+    // 本月和本日销售额
+    month: 3560.50,
+    day: 350.00,
+    
+    // 充电桩类型分布数据（用于饼图）
+    chargeMap: {
+      "普通直流桩": 1,
+      "快充直流桩": 1,
+      "标准快充直流充桩": 1,
+      "超级快充桩": 0
+    },
+    
+    // 月度收入趋势数据（用于折线图）
+    monthlyRevenue: {
+      "2025-01": 1250.50,
+      "2025-02": 1680.75,
+      "2025-03": 2100.25,
+      "2025-04": 1850.50,
+      "2025-05": 3250.00,
+      "2025-06": 3560.50
+    }
+  };
+  
+  // 将模拟数据赋值给响应式变量
+  monthTj.value = mockData;
 
-	// 渲染图表
-	nextTick(() => {
-		renderPieChart();
-		renderLineChart();
-	});
+  // 渲染图表
+  nextTick(() => {
+    renderPieChart();
+    renderLineChart();
+  });
 };
 
 // 渲染饼图

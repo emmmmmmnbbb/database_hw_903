@@ -140,7 +140,7 @@ const myCouponList = ref([]);
 // 获取我的优惠券列表
 const getMyCouponList = async () => {
 	const response = await axiosPostRequest("/coupon/Myreceive");
-	if (response.code == 0) {
+	if (response.code === 0) {
 		myCouponList.value = response.data.filter((item) => item.status == 0);
 		console.log(myCouponList.value);
 	}
@@ -148,12 +148,13 @@ const getMyCouponList = async () => {
 getMyCouponList();
 
 const userInfo = ref({});
-userInfo.value = JSON.parse(localStorage.getItem("userInfo"));
+userInfo.value = JSON.parse(localStorage.getItem("userInfo")) || { rate: 0 };
 // 积分
 const rate = ref(0);
 rate.value = userInfo.value.rate;
 const searchFormRef = ref();
 const confirmDialogRef = ref();
+console.log(confirmDialogRef);
 const orderDialogRef = ref();
 const title = ref("");
 const confirmDesc = ref("");

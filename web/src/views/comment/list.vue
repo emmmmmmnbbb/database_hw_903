@@ -294,20 +294,73 @@ const handleSelectionChange = (val) => {
 
 // 获取留言信息
 const getCommentList = async () => {
-  const response = await axiosPostRequest("/comment/list", {
-    page: paginationProps.current,
-    size: paginationProps.pageSize,
-    param: {
-      username: dataList.searchParams.username,
-      content: dataList.searchParams.content,
+  // 使用虚拟数据替代API调用
+  const mockData = [
+    {
+      id: 1,
+      userId: 1,
+      content: "充电桩服务很好，APP操作也简单！",
+      createTime: "2025-06-01 09:15:30",
+      replyContent: "感谢您的支持，我们将继续努力提供更好的服务！",
+      userDTO: {
+        id: 1,
+        username: "alice",
+        phone: "13800000001"
+      }
     },
-  });
-  if (response.code === 0) {
-    dataList.commentList = response.data.list;
-    paginationProps.total = response.data.total;
-  } else {
-    ElMessage.error(response.msg);
+    {
+      id: 2,
+      userId: 2,
+      content: "东门1号桩经常有人占用，希望能增加管理",
+      createTime: "2025-06-02 14:22:45",
+      replyContent: "已收到您的反馈，我们会加强巡查管理",
+      userDTO: {
+        id: 2,
+        username: "bob",
+        phone: "13800000002"
+      }
+    },
+    {
+      id: 3,
+      userId: 3,
+      content: "服务费太贵，冲完电电费才几毛，服务费几块！！！！！！",
+      createTime: "2025-06-03 18:05:12",
+      replyContent: "",
+      userDTO: {
+        id: 3,
+        username: "charlie",
+        phone: "13800000003"
+      }
+    }
+  ];
+
+  // 搜索过滤
+  let filteredData = [...mockData];
+  
+  // 按用户名过滤
+  if (dataList.searchParams.username) {
+    filteredData = filteredData.filter(item => 
+      item.userDTO.username.toLowerCase().includes(dataList.searchParams.username.toLowerCase())
+    );
   }
+  
+  // 按留言内容过滤
+  if (dataList.searchParams.content) {
+    filteredData = filteredData.filter(item => 
+      item.content.includes(dataList.searchParams.content)
+    );
+  }
+  
+  // 如果是普通用户，只显示自己的留言
+  if (dataList.loginUser.roleId === 1) {
+    filteredData = filteredData.filter(item => item.userId === dataList.loginUser.id);
+  }
+
+  // 分页
+  const start = (paginationProps.current - 1) * paginationProps.pageSize;
+  const end = start + paginationProps.pageSize;
+  dataList.commentList = filteredData.slice(start, end);
+  paginationProps.total = filteredData.length;
 };
 </script>
 <style lang="scss" scoped>

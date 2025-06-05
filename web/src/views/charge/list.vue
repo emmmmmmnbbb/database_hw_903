@@ -35,29 +35,49 @@
 				</el-col>
 			</el-row>
 
-			<el-table :data="dataList.chargeList" empty-text="暂时没查到数据哟🛵">
+			<el-table border @selection-change="handleSelectionChange" v-adaptive :data="dataList.chargeList" empty-text="暂时没查到数据哟🛵">
+				<el-table-column type="selection" width="55"> </el-table-column>
 				<el-table-column label="序号" prop="id" width="140px"></el-table-column>
 				<el-table-column label="充电桩名称" prop="name" width="200px"></el-table-column>
 				<el-table-column label="充电桩图片" width="145px">
 					<template #default="scope">
-						<el-image :src="filterPhoto(scope.row.photo)" style="width: 120px; height: 80px" />
+						<div>
+							<el-image :preview-teleported="true" :preview-src-list="[filterPhoto(scope.row.photo)]" style="width: 120px; height: 80px" :src="filterPhoto(scope.row.photo)" />
+						</div>
 					</template>
 				</el-table-column>
 				<el-table-column label="收费价格(元/分钟)" prop="price" width="150px"></el-table-column>
-				<el-table-column label="所属电站" prop="station_name" width="150px"></el-table-column>
-				<el-table-column label="充电桩状态" prop="state" width="150px"></el-table-column>
+				<el-table-column label="所属电站" width="150px">
+					<template #default="scope">
+						<div>
+							{{ scope.row.stationDTO.name }}
+						</div>
+					</template>
+				</el-table-column>
+				<el-table-column label="充电桩状态" width="150px">
+					<template #default="scope">
+						<div>
+							<span style="color: green" v-if="scope.row.state === 1">正常</span>
+							<span style="color: red" v-if="scope.row.state === 2">报修中</span>
+						</div>
+					</template>
+				</el-table-column>
+				<el-table-column label="位置" :show-overflow-tooltip="true" prop="description"></el-table-column>
+				<el-table-column label="操作" width="150px" align="center">
+					<template #default="scope">
+						<el-button type="primary" icon="Location" plain @click="openNavigationDialog(scope.row)">导航</el-button>
+					</template>
+				</el-table-column>
 			</el-table>
 
 			<el-pagination
 				background
-				:current-page="paginationProps.current"
-				:page-size="paginationProps.pageSize"
+				v-model:current-page="paginationProps.current"
+				v-model:page-size="paginationProps.pageSize"
 				:page-sizes="[10, 20, 50, 100, 200]"
 				layout="total, sizes, prev, pager, next, jumper"
 				:total="paginationProps.total"
-				@current-change="onPageChange"
-				@size-change="onPageSizeChange"
-			/>
+				@change="onPageChange" />
 		</el-card>
 
 		<Dialog ref="chargeDialogRef" :title="title" @onConfirm="saveCharge">
@@ -154,13 +174,44 @@ import Dialog from "@/components/Dialog/index.vue";
 import { axiosPostRequest, getSessionStorage, myEventBus } from "@/util/index.js";
 import { format } from "date-fns";
 import maps from "@/components/map.vue";
+import logoImage from "@/assets/logo.png"; // 导入 logo.png
+const mockChargeList = [
+  {
+    id: "CH000001",
+    name: "东门1号桩",
+    photo: "@/assets/logo.png", // 使用 logo.png
+    price: 2.00,
+    stationDTO: { name: "ST000001" },
+    state: 1,
+    description: "普通直流桩",
+  },
+  {
+    id: "CH000002",
+    name: "东门2号桩",
+    photo: "@/assets/logo.png", // 使用 logo.png
+    price: 2.50,
+    stationDTO: { name: "ST000001" },
+    state: 1,
+    description: "快充直流桩",
+  },
+  {
+    id: "CH000091",
+    name: "快充桩A",
+    photo: "@/assets/logo.png", // 使用 logo.png
+    price: 1.50,
+    stationDTO: { name: "ST000001" },
+    state: 1,
+    description: "标准快充直流桩",
+  },
+];
+
 const emitter = myEventBus();
 emitter.on("refresh", () => {
 	getLoginUser();
 });
 
 onMounted(() => {
-	getLoginUser();
+  dataList.chargeList = mockChargeList;
 });
 
 const searchFormRef = ref();
@@ -320,8 +371,7 @@ const getLoginUser = async () => {
 
 // 修改 filterPhoto 计算属性
 const filterPhoto = computed(() => (photo) => {
-  // 不再请求远程图片，使用本地图片
-  return new URL('@/assets/logo.png', import.meta.url).href;
+  return logoImage; // 始终返回 logo.png
 });
 
 // 打开上传图片窗口
@@ -532,14 +582,10 @@ const saveAppoint = async () => {
 };
 
 // 分页变化时候
-const onPageChange = (current) => {
-  paginationProps.current = current;
-  getChargeList();
-};
-
-const onPageSizeChange = (pageSize) => {
-  paginationProps.pageSize = pageSize;
-  getChargeList();
+const onPageChange = (current, pageSize) => {
+	paginationProps.current = current;
+	paginationProps.pageSize = pageSize;
+	getChargeList();
 };
 
 // 记录表格选中行
@@ -549,38 +595,30 @@ const handleSelectionChange = (val) => {
 
 // 获取全部电站信息
 const getAllStation = async () => {
-  const url = "/station/all";
-  console.log("Requesting:", url); // 打印请求地址
-  const response = await axiosPostRequest(url);
-  console.log("Station list response:", response); // 打印响应
-  if (response.code === 0) {
-    dataList.stationList = response.data;
-  } else {
-    ElMessage.error(response.msg);
-  }
+	const response = await axiosPostRequest("/station/all");
+	if (response.code === 0) {
+		dataList.stationList = response.data;
+	} else {
+		ElMessage.error(response.msg);
+	}
 };
 
+// 获取充电桩信息
 const getChargeList = async () => {
-  const url = "/charge/list";
-  const params = {
-    page: paginationProps.current,
-    size: paginationProps.pageSize,
-    param: {
-      name: dataList.searchParams.name,
-      stationId: dataList.searchParams.stationId,
-    },
-  };
-  console.log("Requesting:", url, "with params:", params); // 打印请求地址和参数
-  const response = await axiosPostRequest(url, params);
-  console.log("Charge list response:", response); // 打印响应
-  if (response.code === 0) {
-	console.log("nb"); // 打印响应
-    dataList.chargeList = response.data;
-	console.log("datalist.chargelist是不是空的", dataList.chargeList); // 打印响应
-    paginationProps.total = response.data.total;
-  } else {
-    ElMessage.error(response.msg);
-  }
+	const response = await axiosPostRequest("/charge/list", {
+		page: paginationProps.current,
+		size: paginationProps.pageSize,
+		param: {
+			name: dataList.searchParams.name,
+			stationId: dataList.searchParams.stationId
+		}
+	});
+	if (response.code === 0) {
+		dataList.chargeList = response.data.list;
+		paginationProps.total = response.data.total;
+	} else {
+		ElMessage.error(response.msg);
+	}
 };
 </script>
 <style lang="scss" scoped>

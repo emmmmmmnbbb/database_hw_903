@@ -45,7 +45,7 @@ def user_login():
                 "money": float(user.money or 0)
             }
             token = auth.generateToken(data)
-            return jsonify({"code": 0, "msg": "登录成功", "token": token, "data": data})
+            return jsonify({"code": 200, "msg": "登录成功", "token": token, "data": data})
         return jsonify({"code": 1, "msg": "用户名或密码错误"})
     except Exception as e:
         return jsonify({"code": 1, "msg": f"登录失败: {str(e)}"})
@@ -93,6 +93,8 @@ def user_list():
         }
 
         # 查询用户列表
+        print("Executing SQL for user list:", sql)
+        print("With parameters:", params)
         data = db.session.execute(text(sql), params).fetchall()
         users = [{
             "id": row.id,
@@ -102,10 +104,11 @@ def user_list():
             "headPic": row.head_pic,
             "sex": row.sex,
             "money": float(row.money or 0),
-            "rate": row.rate
+            "rate": row.rate or 0  # 确保 rate 有默认值
         } for row in data]
 
         # 查询总数
+        print("Executing SQL for user count:", count_sql)
         total = db.session.execute(text(count_sql), params).scalar()
 
         return jsonify({"code": 0, "data": {"list": users, "total": total}})
@@ -537,6 +540,348 @@ def register():
     except Exception as e:
         db.session.rollback()
         return jsonify({"code": 1, "msg": f"注册失败: {str(e)}"})
+    
+@app.route("/order/list", methods=["POST"])
+def order_list():
+    try:
+        form = request.json
+        page = form.get("page", 1)
+        size = form.get("size", 10)
+        param = form.get("param", {})
+        user_id = param.get("userId", "")
+        state = param.get("state", 0)
+
+        # 构建查询条件
+        sql = '''
+            SELECT o.id, o.total_price, o.user_id, o.charge_id, o.create_time, o.state,
+                   u.username as userDTO_username
+            FROM orders o
+            LEFT JOIN user u ON o.user_id = u.id
+            WHERE (:user_id = '' OR o.user_id = :user_id)
+              AND (:state = 0 OR o.state = :state)
+            LIMIT :limit OFFSET :offset
+        '''
+        count_sql = '''
+            SELECT COUNT(*) as total
+            FROM orders o
+            WHERE (:user_id = '' OR o.user_id = :user_id)
+              AND (:state = 0 OR o.state = :state)
+        '''
+        params = {
+            "user_id": user_id,
+            "state": state,
+            "limit": size,
+            "offset": (page - 1) * size,
+        }
+
+        # 查询订单列表
+        data = db.session.execute(text(sql), params).fetchall()
+        orders = [{
+            "id": row.id,
+            "total_price": float(row.total_price),
+            "user_id": row.user_id,
+            "charge_id": row.charge_id,
+            "create_time": row.create_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "state": row.state,
+            "userDTO": {
+                "username": row.userDTO_username
+            }
+        } for row in data]
+
+        # 查询总数
+        total = db.session.execute(text(count_sql), params).scalar()
+
+        return jsonify({"code": 0, "data": {"list": orders, "total": total}})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"获取订单列表失败: {str(e)}"})
+    
+@app.route('/coupon/Myreceive', methods=['POST'])
+def my_receive_coupon():
+    try:
+        user_id = request.json.get("userId")
+        sql = text('SELECT * FROM user_coupon WHERE user_id = :user_id')
+        coupons = db.session.execute(sql, {"user_id": user_id}).fetchall()
+        return jsonify({"code": 0, "data": [dict(row) for row in coupons]})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"获取优惠券失败: {str(e)}"})
+    
+@app.route("/appoint/list", methods=["POST"])
+def appoint_list():
+    try:
+        form = request.json
+        page = form.get("page", 1)
+        size = form.get("size", 10)
+        param = form.get("param", {})
+        user_id = param.get("userId", "")
+        username = param.get("username", "")
+        charge_id = param.get("chargeId", 0)
+
+        # 构建查询条件
+        sql = '''
+            SELECT a.id, a.charge_id, a.charge_name, a.charge_price, a.create_time, a.day, a.time, a.state, a.start_time, a.end_time,
+                   u.username as userDTO_username
+            FROM appoint a
+            LEFT JOIN user u ON a.user_id = u.id
+            WHERE (:user_id = '' OR a.user_id = :user_id)
+              AND (:username = '' OR u.username LIKE :username_pattern)
+              AND (:charge_id = 0 OR a.charge_id = :charge_id)
+            LIMIT :limit OFFSET :offset
+        '''
+        count_sql = '''
+            SELECT COUNT(*) as total
+            FROM appoint a
+            LEFT JOIN user u ON a.user_id = u.id
+            WHERE (:user_id = '' OR a.user_id = :user_id)
+              AND (:username = '' OR u.username LIKE :username_pattern)
+              AND (:charge_id = 0 OR a.charge_id = :charge_id)
+        '''
+        params = {
+            "user_id": user_id,
+            "username_pattern": f"%{username}%",
+            "charge_id": charge_id,
+            "limit": size,
+            "offset": (page - 1) * size,
+        }
+
+        # 查询预约列表
+        data = db.session.execute(text(sql), params).fetchall()
+        appoints = [{
+            "id": row.id,
+            "charge_id": row.charge_id,
+            "charge_name": row.charge_name,
+            "charge_price": float(row.charge_price),
+            "create_time": row.create_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "day": row.day.strftime("%Y-%m-%d"),
+            "time": row.time,
+            "state": row.state,
+            "start_time": row.start_time.strftime("%Y-%m-%d %H:%M:%S") if row.start_time else None,
+            "end_time": row.end_time.strftime("%Y-%m-%d %H:%M:%S") if row.end_time else None,
+            "userDTO": {
+                "username": row.userDTO_username
+            }
+        } for row in data]
+
+        # 查询总数
+        total = db.session.execute(text(count_sql), params).scalar()
+
+        return jsonify({"code": 0, "data": {"list": appoints, "total": total}})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"获取预约列表失败: {str(e)}"})
+    
+@app.route("/charge/all", methods=["POST"])
+def charge_all():
+    try:
+        sql = '''
+            SELECT id, name, station_id, photo, state, price, description
+            FROM charge
+        '''
+        data = db.session.execute(text(sql)).fetchall()
+        charges = [{
+            "id": row.id,
+            "name": row.name,
+            "station_id": row.station_id,
+            "photo": row.photo,
+            "state": row.state,
+            "price": float(row.price),
+            "description": row.description
+        } for row in data]
+        return jsonify({"code": 0, "data": charges})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"获取充电桩列表失败: {str(e)}"})
+
+# 添加 /appoint/all 路由
+@app.route("/appoint/all", methods=["POST"])
+def appoint_all():
+    try:
+        sql = '''
+            SELECT a.id, a.user_id, a.charge_id, a.charge_price, a.create_time, a.day, a.time, a.state, a.start_time, a.end_time,
+                   u.username as user_name, c.name as charge_name
+            FROM appoint a
+            LEFT JOIN user u ON a.user_id = u.id
+            LEFT JOIN charge c ON a.charge_id = c.id
+        '''
+        data = db.session.execute(text(sql)).fetchall()
+        appoints = [{
+            "id": row.id,
+            "user_id": row.user_id,
+            "charge_id": row.charge_id,
+            "charge_price": float(row.charge_price),
+            "create_time": row.create_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "day": row.day.strftime("%Y-%m-%d"),
+            "time": row.time,
+            "state": row.state,
+            "start_time": row.start_time.strftime("%Y-%m-%d %H:%M:%S") if row.start_time else None,
+            "end_time": row.end_time.strftime("%Y-%m-%d %H:%M:%S") if row.end_time else None,
+            "user_name": row.user_name,
+            "charge_name": row.charge_name
+        } for row in data]
+        return jsonify({"code": 0, "data": appoints})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"获取预约列表失败: {str(e)}"})
+
+# 添加 /appoint/appointed 路由
+@app.route("/appoint/appointed", methods=["POST"])
+def appoint_appointed():
+    try:
+        form = request.json
+        user_id = form.get("userId")
+        sql = '''
+            SELECT a.id, a.charge_id, a.charge_price, a.create_time, a.day, a.time, a.state, a.start_time, a.end_time,
+                   c.name as charge_name
+            FROM appoint a
+            LEFT JOIN charge c ON a.charge_id = c.id
+            WHERE a.user_id = :user_id AND a.state = 1
+        '''
+        data = db.session.execute(text(sql), {"user_id": user_id}).fetchall()
+        appoints = [{
+            "id": row.id,
+            "charge_id": row.charge_id,
+            "charge_price": float(row.charge_price),
+            "create_time": row.create_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "day": row.day.strftime("%Y-%m-%d"),
+            "time": row.time,
+            "state": row.state,
+            "start_time": row.start_time.strftime("%Y-%m-%d %H:%M:%S") if row.start_time else None,
+            "end_time": row.end_time.strftime("%Y-%m-%d %H:%M:%S") if row.end_time else None,
+            "charge_name": row.charge_name
+        } for row in data]
+        return jsonify({"code": 0, "data": appoints})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"获取已预约列表失败: {str(e)}"})
+
+# 添加 /user/rate 路由
+@app.route("/user/rate", methods=["POST"])
+def user_rate():
+    try:
+        form = request.json
+        user_id = form.get("userId")
+        sql = '''
+            SELECT rate FROM user WHERE id = :user_id
+        '''
+        rate = db.session.execute(text(sql), {"user_id": user_id}).scalar()
+        return jsonify({"code": 0, "data": {"rate": rate}})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"获取用户信誉积分失败: {str(e)}"})
+
+# 添加 /order/all 路由
+@app.route("/order/all", methods=["POST"])
+def order_all():
+    try:
+        sql = '''
+            SELECT o.id, o.total_price, o.user_id, o.charge_id, o.create_time, o.state,
+                   u.username as user_name, c.name as charge_name
+            FROM orders o
+            LEFT JOIN user u ON o.user_id = u.id
+            LEFT JOIN charge c ON o.charge_id = c.id
+        '''
+        data = db.session.execute(text(sql)).fetchall()
+        orders = [{
+            "id": row.id,
+            "total_price": float(row.total_price),
+            "user_id": row.user_id,
+            "charge_id": row.charge_id,
+            "create_time": row.create_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "state": row.state,
+            "user_name": row.user_name,
+            "charge_name": row.charge_name
+        } for row in data]
+        return jsonify({"code": 0, "data": orders})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"获取订单列表失败: {str(e)}"})
+
+# 添加 /warn/all 路由
+@app.route("/warn/all", methods=["POST"])
+def warn_all():
+    try:
+        sql = '''
+            SELECT * FROM warn
+        '''
+        data = db.session.execute(text(sql)).fetchall()
+        warns = [dict(row) for row in data]
+        return jsonify({"code": 0, "data": warns})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"获取警告信息失败: {str(e)}"})
+
+# 添加 /comment/all 路由
+@app.route("/comment/all", methods=["POST"])
+def comment_all():
+    try:
+        sql = '''
+            SELECT c.id, c.content, c.create_time, c.reply_content, c.user_id, u.username as user_name
+            FROM comment c
+            LEFT JOIN user u ON c.user_id = u.id
+        '''
+        data = db.session.execute(text(sql)).fetchall()
+        comments = [{
+            "id": row.id,
+            "content": row.content,
+            "create_time": row.create_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "reply_content": row.reply_content,
+            "user_id": row.user_id,
+            "user_name": row.user_name
+        } for row in data]
+        return jsonify({"code": 0, "data": comments})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"获取评论列表失败: {str(e)}"})
+
+# 添加 /repair/list 路由
+@app.route("/repair/list", methods=["POST"])
+def repair_list():
+    try:
+        form = request.json
+        page = form.get("page", 1)
+        size = form.get("size", 10)
+        param = form.get("param", {})
+        user_id = param.get("userId", "")
+        charge_id = param.get("chargeId", "")
+        state = param.get("state", 0)
+
+        # 构建查询条件
+        sql = '''
+            SELECT r.id, r.user_id, r.charge_id, r.state, r.create_time, r.description,
+                   u.username as user_name, c.name as charge_name
+            FROM repair r
+            LEFT JOIN user u ON r.user_id = u.id
+            LEFT JOIN charge c ON r.charge_id = c.id
+            WHERE (:user_id = '' OR r.user_id = :user_id)
+              AND (:charge_id = '' OR r.charge_id = :charge_id)
+              AND (:state = 0 OR r.state = :state)
+            LIMIT :limit OFFSET :offset
+        '''
+        count_sql = '''
+            SELECT COUNT(*) as total
+            FROM repair r
+            WHERE (:user_id = '' OR r.user_id = :user_id)
+              AND (:charge_id = '' OR r.charge_id = :charge_id)
+              AND (:state = 0 OR r.state = :state)
+        '''
+        params = {
+            "user_id": user_id,
+            "charge_id": charge_id,
+            "state": state,
+            "limit": size,
+            "offset": (page - 1) * size,
+        }
+
+        # 查询维修列表
+        data = db.session.execute(text(sql), params).fetchall()
+        repairs = [{
+            "id": row.id,
+            "user_id": row.user_id,
+            "charge_id": row.charge_id,
+            "state": row.state,
+            "create_time": row.create_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "description": row.description,
+            "user_name": row.user_name,
+            "charge_name": row.charge_name
+        } for row in data]
+
+        # 查询总数
+        total = db.session.execute(text(count_sql), params).scalar()
+
+        return jsonify({"code": 0, "data": {"list": repairs, "total": total}})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"获取维修列表失败: {str(e)}"})
 
 if __name__ == "__main__":
     app.run(debug=True, host="127.0.0.1", port=5000)

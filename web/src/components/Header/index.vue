@@ -122,6 +122,7 @@ import { ElMessage } from "element-plus";
 import { getBreadcrumbList } from "@/util/index.js";
 import Dialog from "@/components/Dialog/index.vue";
 import { computed, reactive, onMounted, ref } from "vue";
+import logoImage from "@/assets/logo.jpg"; // 导入本地图片
 import {
   axiosPostRequest,
   getSessionStorage,
@@ -188,7 +189,11 @@ const data = reactive({
 });
 
 const filterPhoto = computed(() => (photo) => {
-  return import.meta.env.VITE_SERVER + "/photo/view?filename=" + photo;
+  // 直接返回本地图片
+  return logoImage;
+  
+  // 原来的代码可以注释掉
+  // return import.meta.env.VITE_SERVER + "/photo/view?filename=" + photo;
 });
 
 // 获取当前登录用户

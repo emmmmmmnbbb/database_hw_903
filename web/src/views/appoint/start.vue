@@ -187,6 +187,7 @@
     </div>
 </template>
 <script setup>
+    
     import { ref, reactive, onMounted } from "vue";
     import { ElMessage } from "element-plus";
     import Dialog from "@/components/Dialog/index.vue";
@@ -200,10 +201,76 @@
     emitter.on("refresh", () => {
         getLoginUser();
     });
-    onMounted(() => {
-        getLoginUser();
-    });
+onMounted(() => {
+  // 使用模拟数据
+//   dataList.loginUser = {
+//     id: "user001",
+//     roleId: 1,
+//     username: "测试用户",
+//   };
+  dataList.appointList = mockAppointList;
+  dataList.chargeList = mockChargeList;
+  paginationProps.total = mockAppointList.length;
+});
+const mockAppointList = [
+  {
+    id: "AP000001",
+    chargeId: "CH000001",
+    chargeName: "东门1号桩",
+    chargePrice: 2.00,
+    userDTO: { username: "无" },
+    state: 1, // 待使用
+    day: "2025-06-05",
+    time: "08:00-10:00",
+    startTime: "",
+    endTime: "",
+    createTime: "2025-06-04 14:00:00",
+    userId: "user001",
+  },
+  {
+    id: "AP000002",
+    chargeId: "CH000002",
+    chargeName: "东门2号桩",
+    chargePrice: 2.50,
+    userDTO: { username: "liuchang" },
+    state: 2, // 充电中
+    day: "2025-06-05",
+    time: "10:00-12:00",
+    startTime: "2025-06-05 10:00:00",
+    endTime: "",
+    createTime: "2025-06-04 15:00:00",
+    userId: "user002",
+  },
+  {
+    id: "AP000003",
+    chargeId: "CH000091",
+    chargeName: "快充桩A",
+    chargePrice: 1.50,
+    userDTO: { username: "无" },
+    state: 1, // 待使用
+    day: "2025-06-05",
+    time: "14:00-16:00",
+    startTime: "",
+    endTime: "",
+    createTime: "2025-06-03 16:00:00",
+    userId: "user003",
+  },
+];
 
+const mockChargeList = [
+  {
+    id: "CH000001",
+    name: "东门1号桩",
+  },
+  {
+    id: "CH000002",
+    name: "东门2号桩",
+  },
+  {
+    id: "CH000091",
+    name: "快充桩A",
+  },
+];
     const searchFormRef = ref();
     const confirmDialogRef = ref();
     const appointDialogRef = ref();
@@ -668,34 +735,30 @@
     };
 
     // 获取全部充电桩信息
-    const getAllCharge = async () => {
-        const response = await axiosPostRequest("/charge/all");
-        if (response.code === 0) {
-            dataList.chargeList = response.data;
-        } else {
-            ElMessage.error(response.msg);
-        }
-    };
+const getAllCharge = () => {
+  dataList.chargeList = mockChargeList;
+};
 
     // 获取预约信息
-    const getAppointList = async () => {
-        const response = await axiosPostRequest("/appoint/list", {
-            page: paginationProps.current,
-            size: paginationProps.pageSize,
-            param: {
-                userId: dataList.loginUser.roleId === 1 ? dataList.loginUser.id : "",
-                username: dataList.searchParams.username,
-                chargeId: dataList.searchParams.chargeId,
-                type: 1
-            },
-        });
-        if (response.code === 0) {
-            dataList.appointList = response.data.list;
-            paginationProps.total = response.data.total;
-        } else {
-            ElMessage.error(response.msg);
-        }
-    };
+const getAppointList = () => {
+  let filteredData = mockAppointList;
+
+  // 模拟搜索过滤
+  if (dataList.searchParams.username) {
+    filteredData = filteredData.filter((item) =>
+      item.userDTO.username.includes(dataList.searchParams.username)
+    );
+  }
+  if (dataList.searchParams.chargeId && dataList.searchParams.chargeId !== 0) {
+    filteredData = filteredData.filter(
+      (item) => item.chargeId === dataList.searchParams.chargeId
+    );
+  }
+
+  dataList.appointList = filteredData;
+  paginationProps.total = filteredData.length;
+};
+
 </script>
 <style lang="scss" scoped>
     .card-list {

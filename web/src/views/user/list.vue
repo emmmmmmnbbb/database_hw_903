@@ -122,6 +122,8 @@ import { ref, reactive, onMounted, computed } from "vue";
 import { ElMessage } from "element-plus";
 import Dialog from "@/components/Dialog/index.vue";
 import { axiosPostRequest, getSessionStorage, myEventBus } from "@/util/index.js";
+
+import logoImage from "@/assets/logo.png"; // 如果在assets目录
 const emitter = myEventBus();
 emitter.on("refresh", () => {
 	getLoginUser();
@@ -185,8 +187,16 @@ const dataList = reactive({
 	userList: []
 });
 
+// 修改 filterPhoto 方法，让其优先返回本地logo
 const filterPhoto = computed(() => (photo) => {
-	return import.meta.env.VITE_SERVER + "/photo/view?filename=" + photo;
+  // 总是返回本地图片
+  return logoImage;
+  
+  // 或者如果你想保留原有功能但对特定头像使用logo:
+  // if (photo === 'your_specific_photo_name.jpg') {
+  //   return logoImage;
+  // }
+  // return import.meta.env.VITE_SERVER + "/photo/view?filename=" + photo;
 });
 
 // 打开上传图片窗口
@@ -265,51 +275,20 @@ const removeUser = async () => {
 	}
 };
 
-// 获取用户信息
-const getUserList = async () => {
-  try {
-    const response = await axiosPostRequest("/user/list", {
-      page: paginationProps.current,
-      size: paginationProps.pageSize,
-      param: {
-        id: dataList.loginUser.roleId === 1 ? dataList.loginUser.id : "",
-        username: dataList.searchParams.username,
-        roleId: dataList.searchParams.roleId,
-      },
-    });
-    if (response.code === 0) {
-      dataList.userList = response.data.list;
-      paginationProps.total = response.data.total;
-    } else {
-      console.error("Get user list failed:", response.msg);
-      ElMessage.error(response.msg || "获取用户列表失败");
-    }
-  } catch (error) {
-    console.error("Error fetching user list:", error);
-    ElMessage.error("获取用户列表失败");
-  }
-};
-
 // 保存用户信息
 const saveUser = async () => {
-  try {
-    const response = await axiosPostRequest("/user/save", {
-      ...dataList.userForm,
-      token: getSessionStorage(),
-    });
-    if (response.code === 0) {
-      ElMessage.success(response.msg);
-      userDialogRef.value.closeDialog();
-      getUserList();
-      emitter.emit("refresh");
-    } else {
-      console.error("Save user failed:", response.msg);
-      ElMessage.error(response.msg || "保存用户信息失败");
-    }
-  } catch (error) {
-    console.error("Error saving user:", error);
-    ElMessage.error("保存用户信息失败");
-  }
+	const response = await axiosPostRequest("/user/save", {
+		...dataList.userForm,
+		token: getSessionStorage()
+	});
+	if (response.code === 0) {
+		ElMessage.success(response.msg);
+		userDialogRef.value.closeDialog();
+		getUserList();
+		emitter.emit("refresh");
+	} else {
+		ElMessage.error(response.msg);
+	}
 };
 
 // 分页变化时候
@@ -322,6 +301,42 @@ const onPageChange = (current, pageSize) => {
 // 记录表格选中行
 const handleSelectionChange = (val) => {
 	dataList.multipleSelection = val;
+};
+
+// 获取用户信息
+const getUserList = async () => {
+  // 虚拟数据
+  const mockData = [
+    { id: 1, username: 'alice', password: '123', phone: '13800000001', headPic: 'common/no_image.png', sex: 2, roleId: 1, rate: 100, money: 500.00 },
+    { id: 2, username: 'bob', password: '456', phone: '13800000002', headPic: 'common/no_image.png', sex: 1, roleId: 1, rate: 90, money: 200.00 },
+    { id: 3, username: 'charlie', password: '789', phone: '13800000003', headPic: 'common/no_image.png', sex: 1, roleId: 1, rate: 80, money: 100.00 },
+    { id: 4, username: 'liuchang', password: '123', phone: '13800000005', headPic: 'common/no_image.png', sex: 1, roleId: 2, rate: 100, money: 1000.00 },
+    { id: 5, username: 'admin', password: 'admin123', phone: '13800000006', headPic: 'common/no_image.png', sex: 1, roleId: 2, rate: 100, money: 0.00 }
+  ];
+
+  // 搜索过滤
+  let filteredData = [...mockData];
+  
+  if (dataList.searchParams.username) {
+    filteredData = filteredData.filter(item => 
+      item.username.toLowerCase().includes(dataList.searchParams.username.toLowerCase())
+    );
+  }
+  
+  if (dataList.searchParams.roleId !== 0) {
+    filteredData = filteredData.filter(item => item.roleId === dataList.searchParams.roleId);
+  }
+  
+  // 如果是普通用户，只显示自己的信息
+  if (dataList.loginUser.roleId === 1) {
+    filteredData = filteredData.filter(item => item.id === dataList.loginUser.id);
+  }
+
+  // 分页
+  const start = (paginationProps.current - 1) * paginationProps.pageSize;
+  const end = start + paginationProps.pageSize;
+  dataList.userList = filteredData.slice(start, end);
+  paginationProps.total = filteredData.length;
 };
 </script>
 <style lang="scss" scoped>

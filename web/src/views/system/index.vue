@@ -14,7 +14,7 @@
       >
         <img
           class="user-img"
-          :src="getLocalLogo"
+          :src="getLocalLogo()"
           alt="avatar"
         />
         <div style="padding-left: 20px">
@@ -144,7 +144,7 @@ import {
   myEventBus,
 } from "@/util/index.js";
 import { useRouter } from "vue-router";
-import logoImage from "@/assets/logo.png"; //导入本地图片
+import logoImage from "@/assets/logo.jpg"; //导入本地图片
 const router = useRouter();
 const emitter = myEventBus();
 emitter.on("refresh", () => {
@@ -199,165 +199,89 @@ const getLoginUser = async () => {
 
 
 
+
+// 获取预约数
+const getAppointedNum = computed(() => (day) => {
+  let count = 0;
+  data.appointedList.forEach((item) => {
+    if (item.day === day) {
+      count++;
+    }
+  });
+  return count;
+});
+
 // 获取当前登录用户的预约数据
 const getAppointList = async () => {
-  // 使用模拟数据
-  data.appointList = [
-    { id: 1, userId: data.loginUser.id, station: "充电站A", time: "2025-05-14 10:00", status: "待充电" },
-    { id: 2, userId: data.loginUser.id, station: "充电站B", time: "2025-05-15 14:30", status: "已完成" },
-    { id: 3, userId: data.loginUser.id, station: "充电站C", time: "2025-05-16 09:15", status: "已取消" }
-  ];
+  const response = await axiosPostRequest("/appoint/all", {
+    userId: data.loginUser.roleId === 1 ? data.loginUser.id : "",
+  });
+  if (response.code === 0) {
+    data.appointList = response.data;
+  } else {
+    ElMessage.error(response.msg);
+  }
 };
 
 // 获取日历上预约数据
 const getAppointedList = async () => {
-  // 使用模拟数据
-  const today = new Date();
-  const formatDate = (date) => {
-    return date.toISOString().split('T')[0];
-  };
-  
-  // 为接下来7天创建模拟预约数据
-  data.appointedList = [];
-  for (let i = 0; i < 7; i++) {
-    const date = new Date();
-    date.setDate(today.getDate() + i);
-    const count = Math.floor(Math.random() * 3) + 1; // 1-3个预约
-    
-    data.appointedList.push({
-      day: formatDate(date),
-      count: count
-    });
+  const response = await axiosPostRequest("/appoint/appointed", {
+    userId: data.loginUser.id,
+  });
+  if (response.code === 0) {
+    data.appointedList = response.data;
+  } else {
+    ElMessage.error(response.msg);
   }
 };
 
 // 获取当前登录用户的积分明细
 const getRateList = async () => {
-  // 使用模拟数据
-  data.rateList = [
-    { id: 1, userId: data.loginUser.id, points: 100, description: "充电完成", date: "2025-05-10" },
-    { id: 2, userId: data.loginUser.id, points: 50, description: "按时充电", date: "2025-05-12" },
-    { id: 3, userId: data.loginUser.id, points: -20, description: "迟到", date: "2025-05-13" }
-  ];
+  const response = await axiosPostRequest("/user/rate", {
+    id: data.loginUser.id,
+  });
+  if (response.code === 0) {
+    data.rateList = response.data;
+  } else {
+    ElMessage.error(response.msg);
+  }
 };
 
 // 获取当前登录用户的告警数据
 const getWarnList = async () => {
-  // 使用模拟数据
-  data.warnList = [
-    { id: 1, userId: data.loginUser.id, type: "充电异常", description: "充电过程中断", time: "2025-05-14 10:30" },
-    { id: 2, userId: data.loginUser.id, type: "设备异常", description: "设备温度过高", time: "2025-05-13 15:45" }
-  ];
+  const response = await axiosPostRequest("/warn/all", {
+    userId: data.loginUser.roleId === 1 ? data.loginUser.id : "",
+  });
+  if (response.code === 0) {
+    data.warnList = response.data;
+  } else {
+    ElMessage.error(response.msg);
+  }
 };
 
 // 获取当前登录用户的订单数据
 const getOrderList = async () => {
-  // 使用模拟数据
-  data.orderList = [
-    { id: 101, userId: data.loginUser.id, amount: 50, status: "已支付", time: "2025-05-14 11:00" },
-    { id: 102, userId: data.loginUser.id, amount: 30, status: "已支付", time: "2025-05-12 13:20" },
-    { id: 103, userId: data.loginUser.id, amount: 45, status: "待支付", time: "2025-05-15 09:45" }
-  ];
+  const response = await axiosPostRequest("/order/all", {
+    userId: data.loginUser.roleId === 1 ? data.loginUser.id : "",
+  });
+  if (response.code === 0) {
+    data.orderList = response.data;
+  } else {
+    ElMessage.error(response.msg);
+  }
 };
 
 // 获取当前登录用户的留言数据
 const getCommentList = async () => {
-  // 使用模拟数据
-  data.commentList = [
-    { id: 201, userId: data.loginUser.id, content: "服务很满意", time: "2025-05-13 12:00", reply: "感谢您的支持" },
-    { id: 202, userId: data.loginUser.id, content: "充电速度很快", time: "2025-05-10 14:30", reply: "" }
-  ];
+  const response = await axiosPostRequest("/comment/all", {
+    userId: data.loginUser.roleId === 1 ? data.loginUser.id : "",
+  });
+  if (response.code === 0) {
+    data.commentList = response.data;
+  } else {
+    ElMessage.error(response.msg);
+  }
 };
-
-// 获取预约数
-const getAppointedNum = computed(() => (day) => {
-  const appointmentOnDay = data.appointedList.find(item => item.day === day);
-  return appointmentOnDay ? appointmentOnDay.count : 0;
-});
-
-
-// // 获取预约数
-// const getAppointedNum = computed(() => (day) => {
-//   let count = 0;
-//   data.appointedList.forEach((item) => {
-//     if (item.day === day) {
-//       count++;
-//     }
-//   });
-//   return count;
-// });
-
-// // 获取当前登录用户的预约数据
-// const getAppointList = async () => {
-//   const response = await axiosPostRequest("/appoint/all", {
-//     userId: data.loginUser.roleId === 1 ? data.loginUser.id : "",
-//   });
-//   if (response.code === 0) {
-//     data.appointList = response.data;
-//   } else {
-//     ElMessage.error(response.msg);
-//   }
-// };
-
-// // 获取日历上预约数据
-// const getAppointedList = async () => {
-//   const response = await axiosPostRequest("/appoint/appointed", {
-//     userId: data.loginUser.id,
-//   });
-//   if (response.code === 0) {
-//     data.appointedList = response.data;
-//   } else {
-//     ElMessage.error(response.msg);
-//   }
-// };
-
-// // 获取当前登录用户的积分明细
-// const getRateList = async () => {
-//   const response = await axiosPostRequest("/user/rate", {
-//     id: data.loginUser.id,
-//   });
-//   if (response.code === 0) {
-//     data.rateList = response.data;
-//   } else {
-//     ElMessage.error(response.msg);
-//   }
-// };
-
-// // 获取当前登录用户的告警数据
-// const getWarnList = async () => {
-//   const response = await axiosPostRequest("/warn/all", {
-//     userId: data.loginUser.roleId === 1 ? data.loginUser.id : "",
-//   });
-//   if (response.code === 0) {
-//     data.warnList = response.data;
-//   } else {
-//     ElMessage.error(response.msg);
-//   }
-// };
-
-// // 获取当前登录用户的订单数据
-// const getOrderList = async () => {
-//   const response = await axiosPostRequest("/order/all", {
-//     userId: data.loginUser.roleId === 1 ? data.loginUser.id : "",
-//   });
-//   if (response.code === 0) {
-//     data.orderList = response.data;
-//   } else {
-//     ElMessage.error(response.msg);
-//   }
-// };
-
-// // 获取当前登录用户的留言数据
-// const getCommentList = async () => {
-//   const response = await axiosPostRequest("/comment/all", {
-//     userId: data.loginUser.roleId === 1 ? data.loginUser.id : "",
-//   });
-//   if (response.code === 0) {
-//     data.commentList = response.data;
-//   } else {
-//     ElMessage.error(response.msg);
-//   }
-// };
 </script>
 <style lang="scss" scoped>
 .card {

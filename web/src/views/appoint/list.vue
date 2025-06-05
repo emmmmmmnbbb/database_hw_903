@@ -678,31 +678,73 @@ const handleSelectionChange = (val) => {
 
 // 获取全部充电桩信息
 const getAllCharge = async () => {
-  const response = await axiosPostRequest("/charge/all");
-  if (response.code === 0) {
-    dataList.chargeList = response.data;
-  } else {
-    ElMessage.error(response.msg);
-  }
+  // 使用虚拟数据替代API调用
+  dataList.chargeList = [
+    {
+      id: "CH000001",
+      name: "东门1号桩",
+      code: "ST000001",
+      photo: "common/no_image.jpg",
+      type: 1,
+      price: 2.00,
+      typeName: "普通直流桩"
+    }
+  ];
 };
 
 // 获取预约信息
 const getAppointList = async () => {
-  const response = await axiosPostRequest("/appoint/list", {
-    page: paginationProps.current,
-    size: paginationProps.pageSize,
-    param: {
-      userId: dataList.loginUser.roleId === 1 ? dataList.loginUser.id : "",
-      username: dataList.searchParams.username,
-      chargeId: dataList.searchParams.chargeId,
-    },
-  });
-  if (response.code === 0) {
-    dataList.appointList = response.data.list;
-    paginationProps.total = response.data.total;
-  } else {
-    ElMessage.error(response.msg);
+  // 使用虚拟数据替代API调用
+  const mockData = [
+    {
+      id: 1,
+      chargeId: "CH000001",
+      chargeName: "东门1号桩",
+      chargeCode: "ST000001",
+      chargePhoto: "common/no_image.jpg",
+      chargeType: 1,
+      chargePrice: 2.00,
+      chargeTypeName: "普通直流桩",
+      userId: 1,
+      userDTO: {
+        id: 1,
+        username: "alice",
+        phone: "13800000001"
+      },
+      day: "2025-06-05",
+      time: "08:00-10:00",
+      state: 1, // 待使用
+      startTime: null,
+      endTime: null,
+      createTime: "2025-06-04 14:30:22"
+    }
+  ];
+
+  // 处理搜索过滤
+  let filteredData = [...mockData];
+  
+  if (dataList.searchParams.username) {
+    filteredData = filteredData.filter(item => 
+      item.userDTO.username.toLowerCase().includes(dataList.searchParams.username.toLowerCase())
+    );
   }
+  
+  if (dataList.searchParams.chargeId !== 0) {
+    filteredData = filteredData.filter(item => item.chargeId === dataList.searchParams.chargeId);
+  }
+  
+  // 如果是普通用户，只显示自己的预约
+  if (dataList.loginUser.roleId === 1) {
+    filteredData = filteredData.filter(item => item.userId === dataList.loginUser.id);
+  }
+
+  // 分页处理
+  const start = (paginationProps.current - 1) * paginationProps.pageSize;
+  const end = start + paginationProps.pageSize;
+  
+  // 设置数据和总数
+  dataList.appointList = filteredData.slice(start, end);
+  paginationProps.total = filteredData.length;
 };
 </script>
 <style lang="scss" scoped>
